@@ -1,5 +1,7 @@
+'use client'
+
 import { Card, CardContent } from '@/components/ui/card'
-import { TARGETS } from '@/lib/fitness'
+import { useUserSettings } from '@/lib/settings-context'
 import { fmt, ProgressBar } from './shared'
 
 type Totals = { kcal: number; protein: number; carbs: number; fat: number }
@@ -11,11 +13,20 @@ const MACROS = [
 ] as const
 
 export function DailyMacros({ totals, burned }: { totals: Totals; burned: number }) {
-  const remaining = TARGETS.kcal - totals.kcal + burned
-  const pct = Math.min(1, totals.kcal / TARGETS.kcal)
+  const { settings } = useUserSettings()
+
+  const targets = {
+    kcal: settings?.target_calories ?? 1850,
+    protein: settings?.target_protein ?? 160,
+    carbs: settings?.target_carb ?? 225,
+    fat: settings?.target_fat ?? 32,
+  }
+
+  const remaining = targets.kcal - totals.kcal + burned
+  const pct = Math.min(1, totals.kcal / targets.kcal)
   const r = 52
   const circ = 2 * Math.PI * r
-  const over = totals.kcal > TARGETS.kcal
+  const over = totals.kcal > targets.kcal
 
   return (
     <Card>
@@ -39,7 +50,7 @@ export function DailyMacros({ totals, burned }: { totals: Totals; burned: number
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-extrabold tabular-nums">{fmt(totals.kcal)}</span>
-              <span className="text-xs text-muted-foreground">/ {fmt(TARGETS.kcal)} kcal</span>
+              <span className="text-xs text-muted-foreground">/ {fmt(targets.kcal)} kcal</span>
             </div>
           </div>
 
@@ -63,12 +74,12 @@ export function DailyMacros({ totals, burned }: { totals: Totals; burned: number
           </dl>
         </div>
 
-        <ProgressBar value={totals.kcal} max={TARGETS.kcal} label="Calo nạp vào" />
+        <ProgressBar value={totals.kcal} max={targets.kcal} label="Calo nạp vào" />
 
         <div className="flex flex-col gap-3">
           {MACROS.map((m) => {
             const value = totals[m.key]
-            const target = TARGETS[m.key]
+            const target = targets[m.key]
             return (
               <div key={m.key} className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between text-sm">

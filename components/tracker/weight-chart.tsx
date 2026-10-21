@@ -3,17 +3,21 @@
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
-import { PROFILE } from '@/lib/fitness'
+import { useUserSettings } from '@/lib/settings-context'
 
 const config = {
   avg: { label: 'TB tuần (kg)', color: 'var(--chart-1)' },
 } satisfies ChartConfig
 
 export function WeightChart({ data }: { data: { label: string; avg: number | null; days: number }[] }) {
+  const { settings } = useUserSettings()
+  const goalWeight = settings?.goal_weight ?? 70
+  const startWeight = settings?.weight ?? 76
+
   const values = data.map((d) => d.avg).filter((v): v is number => v !== null)
   const hasData = values.length > 0
-  const min = Math.floor(Math.min(PROFILE.goalWeight, ...values) - 1)
-  const max = Math.ceil(Math.max(PROFILE.startWeight, ...values) + 1)
+  const min = Math.floor(Math.min(goalWeight, ...values) - 1)
+  const max = Math.ceil(Math.max(startWeight, ...values) + 1)
 
   return (
     <Card>
@@ -29,10 +33,10 @@ export function WeightChart({ data }: { data: { label: string; avg: number | nul
               <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
               <YAxis domain={[min, max]} tickLine={false} axisLine={false} fontSize={11} allowDecimals={false} />
               <ReferenceLine
-                y={PROFILE.goalWeight}
+                y={goalWeight}
                 stroke="var(--chart-2)"
                 strokeDasharray="4 4"
-                label={{ value: `Mục tiêu ${PROFILE.goalWeight}kg`, fill: 'var(--chart-2)', fontSize: 11, position: 'insideBottomRight' }}
+                label={{ value: `Mục tiêu ${goalWeight}kg`, fill: 'var(--chart-2)', fontSize: 11, position: 'insideBottomRight' }}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Line

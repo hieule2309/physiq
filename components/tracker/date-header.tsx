@@ -1,29 +1,40 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { addDays, formatDateLong, todayKey } from '@/lib/fitness'
 
-export function DateHeader({ date, onChange }: { date: string; onChange: (d: string) => void }) {
+export function DateHeader({
+  date,
+  onChange,
+  children,
+}: {
+  date: string
+  onChange: (d: string) => void
+  children?: ReactNode
+}) {
   const inputRef = useRef<HTMLInputElement>(null)
   const today = todayKey()
   const isToday = date === today
 
   return (
-    <header className="sticky top-0 z-20 border-b bg-background/85 px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3 backdrop-blur-lg">
+    <header className="sticky top-0 z-20 border-b bg-background/85 px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3 backdrop-blur-lg md:px-8">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground md:hidden">
             <Flame className="size-4.5" aria-hidden="true" />
           </span>
-          <span className="text-lg font-extrabold tracking-tight">FitTrack</span>
+          <span className="text-lg font-extrabold tracking-tight md:hidden">FitTrack</span>
         </div>
-        {!isToday && (
-          <Button size="sm" variant="secondary" onClick={() => onChange(today)}>
-            Về hôm nay
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isToday && (
+            <Button size="sm" variant="secondary" onClick={() => onChange(today)}>
+              Về hôm nay
+            </Button>
+          )}
+          {children}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

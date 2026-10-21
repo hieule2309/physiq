@@ -1,5 +1,10 @@
+import { UserSettingsProvider } from '@/lib/settings-context'
 import { TrackerApp } from '@/components/tracker/tracker-app'
 
 export default function Page() {
-  return <TrackerApp />
+  return (
+    <UserSettingsProvider>
+      <TrackerApp />
+    </UserSettingsProvider>
+  )
 }

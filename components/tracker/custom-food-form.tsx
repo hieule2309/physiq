@@ -5,7 +5,7 @@ import { ChevronDown, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { QuickFood } from '@/lib/fitness'
+import type { FoodEntry } from '@/lib/fitness'
 
 const FIELDS = [
   { key: 'kcal', label: 'Kcal' },
@@ -14,7 +14,7 @@ const FIELDS = [
   { key: 'fat', label: 'Fat (g)' },
 ] as const
 
-export function CustomFoodForm({ onAdd }: { onAdd: (food: QuickFood) => void }) {
+export function CustomFoodForm({ onAdd }: { onAdd: (food: Omit<FoodEntry, 'id'>) => void }) {
   const [open, setOpen] = useState(false)
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

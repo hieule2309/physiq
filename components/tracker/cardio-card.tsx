@@ -6,16 +6,19 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CARDIO_TYPES, cardioKcal, getDay, latestWeight, PROFILE, uid, type CardioType } from '@/lib/fitness'
+import { CARDIO_TYPES, cardioKcal, getDay, latestWeight, uid, type CardioType } from '@/lib/fitness'
+import { useUserSettings } from '@/lib/settings-context'
 import { updateDay, useAppData } from '@/lib/storage'
 import { fmt, NativeSelect } from './shared'
 
 export function CardioCard({ date }: { date: string }) {
   const data = useAppData()
+  const { settings } = useUserSettings()
   const day = getDay(data, date)
   const [type, setType] = useState<CardioType>('incline-walk')
   const [minutes, setMinutes] = useState('')
-  const weight = latestWeight(data, date) ?? PROFILE.startWeight
+  const startWeight = settings?.weight ?? 76
+  const weight = latestWeight(data, date) ?? startWeight
   const mins = Math.max(0, Number(minutes) || 0)
   const preview = cardioKcal(type, mins, weight)
   const total = day.cardio.reduce((a, c) => a + c.kcal, 0)

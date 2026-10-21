@@ -33,16 +33,38 @@ export type FoodEntry = {
   fat: number
 }
 
-export type QuickFood = Omit<FoodEntry, 'id'>
+export type QuickFood = {
+  name: string
+  baseAmount: number
+  unit: string
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+}
 
 export const QUICK_FOODS: QuickFood[] = [
-  { name: '450g Lòng trắng trứng', kcal: 234, protein: 49.5, carbs: 3.2, fat: 0.8 },
-  { name: '400g Ức gà', kcal: 480, protein: 92, carbs: 0, fat: 10.4 },
-  { name: '1 Ổ bánh mì', kcal: 190, protein: 6, carbs: 38, fat: 1.5 },
-  { name: '1 Quả chuối', kcal: 89, protein: 1.1, carbs: 22.8, fat: 0.3 },
-  { name: '100g Cơm trắng', kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 },
-  { name: '100g Rau luộc', kcal: 25, protein: 2, carbs: 4, fat: 0.3 },
+  { name: 'Lòng trắng trứng', baseAmount: 100, unit: 'g', kcal: 52, protein: 11, carbs: 0.7, fat: 0.2 },
+  { name: 'Ức gà', baseAmount: 100, unit: 'g', kcal: 120, protein: 23, carbs: 0, fat: 2.6 },
+  { name: 'Bánh mì', baseAmount: 1, unit: 'ổ', kcal: 190, protein: 6, carbs: 38, fat: 1.5 },
+  { name: 'Chuối', baseAmount: 1, unit: 'quả', kcal: 89, protein: 1.1, carbs: 22.8, fat: 0.3 },
+  { name: 'Cơm trắng', baseAmount: 100, unit: 'g', kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+  { name: 'Rau luộc', baseAmount: 100, unit: 'g', kcal: 25, protein: 2, carbs: 4, fat: 0.3 },
+  { name: 'Chà bông heo', baseAmount: 100, unit: 'g', kcal: 390, protein: 45, carbs: 35, fat: 7 },
+  { name: 'Dưa leo', baseAmount: 1, unit: 'trái', kcal: 24, protein: 1, carbs: 5, fat: 0.2 },
+  { name: 'Trứng luộc', baseAmount: 1, unit: 'quả', kcal: 72, protein: 6, carbs: 0.5, fat: 5 },
+  { name: 'Cafe đen zero', baseAmount: 1, unit: 'ly', kcal: 2, protein: 0.2, carbs: 0, fat: 0 },
+  { name: 'Milo ít đường', baseAmount: 1, unit: 'hộp', kcal: 106, protein: 2.6, carbs: 16, fat: 3.8},
+  { name: 'Hạt dẻ cười muối', baseAmount: 30, unit: 'g', kcal: 160, protein: 6, carbs: 8, fat: 13}
 ]
+
+export function formatFoodName(food: QuickFood, amount: number): string {
+  if (food.unit === 'g') {
+    return `${amount}g ${food.name}`
+  }
+  const capitalizedUnit = food.unit.charAt(0).toUpperCase() + food.unit.slice(1)
+  return `${amount} ${capitalizedUnit} ${food.name}`
+}
 
 export type WorkoutType = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'fullbody' | 'rest'
 
@@ -59,9 +81,9 @@ export const WORKOUT_TYPES: { id: WorkoutType; label: string }[] = [
 export type ExerciseEntry = {
   id: string
   name: string
-  weight: number
-  reps: number
   sets: number
+  weight?: number
+  reps?: number
 }
 
 export type CardioType = 'incline-walk' | 'cycling' | 'running' | 'elliptical' | 'stairs' | 'jump-rope' | 'swimming'
@@ -85,7 +107,12 @@ export type CardioEntry = {
 
 export type DayLog = {
   meals: Record<MealId, FoodEntry[]>
-  supplements: { creatine: boolean; omega3: boolean }
+  supplements: {
+    creatine: boolean
+    omega3Morning: boolean
+    omega3Evening: boolean
+    omega3?: boolean
+  }
   weight: number | null
   workoutType: WorkoutType | null
   exercises: ExerciseEntry[]
@@ -102,7 +129,12 @@ export const EMPTY_APP_DATA: AppData = { version: 1, days: {} }
 export function createEmptyDay(): DayLog {
   return {
     meals: { breakfast: [], lunch: [], preWorkout: [], postWorkout: [] },
-    supplements: { creatine: false, omega3: false },
+    supplements: {
+      creatine: false,
+      omega3Morning: false,
+      omega3Evening: false,
+      omega3: false,
+    },
     weight: null,
     workoutType: null,
     exercises: [],
@@ -148,7 +180,7 @@ export function cardioKcal(type: CardioType, minutes: number, weightKg: number) 
 }
 
 export function exerciseVolume(e: ExerciseEntry) {
-  return e.weight * e.reps * e.sets
+  return (e.weight ?? 0) * (e.reps ?? 0) * e.sets
 }
 
 /* ---------- Dates (local time, yyyy-mm-dd) ---------- */

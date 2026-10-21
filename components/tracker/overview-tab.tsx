@@ -7,11 +7,10 @@ import {
   dayTotals,
   getDay,
   latestWeight,
-  PROFILE,
-  TARGETS,
   WORKOUT_TYPES,
   weeklyAverage,
 } from '@/lib/fitness'
+import { useUserSettings } from '@/lib/settings-context'
 import { useAppData } from '@/lib/storage'
 import type { TabId } from './bottom-nav'
 import { DailyMacros } from './daily-macros'
@@ -20,6 +19,7 @@ import { SupplementsCard } from './supplements-card'
 
 export function OverviewTab({ date, onNavigate }: { date: string; onNavigate: (t: TabId) => void }) {
   const data = useAppData()
+  const { settings } = useUserSettings()
   const day = getDay(data, date)
   const totals = dayTotals(day)
   const burned = day.cardio.reduce((a, c) => a + c.kcal, 0)
@@ -28,16 +28,26 @@ export function OverviewTab({ date, onNavigate }: { date: string; onNavigate: (t
   const lastWeek = weeklyAverage(data, addDays(date, -7))
   const delta = thisWeek.avg !== null && lastWeek.avg !== null ? thisWeek.avg - lastWeek.avg : null
 
-  const current = latestWeight(data, date) ?? PROFILE.startWeight
-  const totalToLose = PROFILE.startWeight - PROFILE.goalWeight
-  const lost = Math.max(0, PROFILE.startWeight - current)
+  const startWeight = settings?.weight ?? 76
+  const goalWeight = settings?.goal_weight ?? 70
+  const current = latestWeight(data, date) ?? startWeight
+  const totalToLose = startWeight - goalWeight
+  const lost = Math.max(0, startWeight - current)
+
+  const bmr = settings?.calculated_bmr ?? 1764
+  const tdee = settings?.calculated_tdee ?? 2735
+  const targetKcal = settings?.target_calories ?? 1850
 
   const workoutLabel = WORKOUT_TYPES.find((w) => w.id === day.workoutType)?.label
 
   return (
     <>
       <DailyMacros totals={totals} burned={burned} />
-      <SupplementsCard date={date} day={day} />
+
+      {/* Supplements — shown inline on mobile, sidebar handles desktop */}
+      <div className="md:hidden">
+        <SupplementsCard date={date} day={day} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <button type="button" onClick={() => onNavigate('weight')} className="text-left">
@@ -72,7 +82,7 @@ export function OverviewTab({ date, onNavigate }: { date: string; onNavigate: (t
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 font-bold">
               <Target className="size-4 text-primary" aria-hidden="true" />
-              Mục tiêu {PROFILE.goalWeight}kg
+              Mục tiêu {goalWeight}kg
             </span>
             <span className="text-sm tabular-nums text-muted-foreground">
               {fmt(lost, 1)} / {totalToLose} kg
@@ -82,22 +92,22 @@ export function OverviewTab({ date, onNavigate }: { date: string; onNavigate: (t
           <dl className="grid grid-cols-3 gap-2 text-center text-xs">
             <div className="rounded-lg bg-muted/50 p-2">
               <dt className="text-muted-foreground">BMR</dt>
-              <dd className="mt-0.5 text-sm font-bold tabular-nums">{fmt(PROFILE.bmr)}</dd>
+              <dd className="mt-0.5 text-sm font-bold tabular-nums">{fmt(bmr)}</dd>
             </div>
             <div className="rounded-lg bg-muted/50 p-2">
               <dt className="text-muted-foreground">TDEE</dt>
-              <dd className="mt-0.5 text-sm font-bold tabular-nums">{fmt(PROFILE.tdee)}</dd>
+              <dd className="mt-0.5 text-sm font-bold tabular-nums">{fmt(tdee)}</dd>
             </div>
             <div className="rounded-lg bg-muted/50 p-2">
               <dt className="text-muted-foreground">Thâm hụt</dt>
               <dd className="mt-0.5 text-sm font-bold tabular-nums text-primary">
-                -{fmt(PROFILE.tdee - TARGETS.kcal)}
+                -{fmt(tdee - targetKcal)}
               </dd>
             </div>
           </dl>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <TrendingDown className="size-3.5" aria-hidden="true" />
-            {PROFILE.sex}, {PROFILE.age} tuổi · {PROFILE.heightCm}cm · Bắt đầu {PROFILE.startWeight}kg
+            {settings?.gender === 'female' ? 'Nữ' : 'Nam'}, {settings?.age ?? 27} tuổi · {settings?.height ?? 175}cm · Bắt đầu {startWeight}kg
           </p>
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import type * as React from 'react'
+import { forwardRef, type ComponentProps, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 export function ProgressBar({
@@ -31,19 +31,23 @@ export function ProgressBar({
   )
 }
 
-export function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
-  return (
-    <select
-      className={cn(
-        'h-9 w-full rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
+export const NativeSelect = forwardRef<HTMLSelectElement, ComponentProps<'select'>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <select
+        ref={ref}
+        className={cn(
+          'h-9 w-full rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+          className,
+        )}
+        {...props}
+      />
+    )
+  },
+)
+NativeSelect.displayName = 'NativeSelect'
 
-export function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+export function SectionTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <h2 className="flex items-center gap-2 text-base font-bold">
       <span className="text-primary">{icon}</span>
@@ -60,9 +64,9 @@ export function StatTile({
   className,
 }: {
   label: string
-  value: React.ReactNode
+  value: ReactNode
   unit?: string
-  hint?: React.ReactNode
+  hint?: ReactNode
   className?: string
 }) {
   return (

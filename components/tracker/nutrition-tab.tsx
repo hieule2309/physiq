@@ -6,52 +6,105 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   dayTotals,
+  formatFoodName,
   getDay,
   MEALS,
   QUICK_FOODS,
   sumFoods,
-  TARGETS,
   uid,
+  type FoodEntry,
   type MealId,
   type QuickFood,
+  round1,
+  type DayLog,
 } from '@/lib/fitness'
+import { useUserSettings } from '@/lib/settings-context'
 import { updateDay, useAppData } from '@/lib/storage'
+import { upsertDailyTracking } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 import { CustomFoodForm } from './custom-food-form'
+import { QuantityFoodModal } from './quantity-food-modal'
 import { fmt } from './shared'
 
 export function NutritionTab({ date }: { date: string }) {
   const data = useAppData()
+  const { settings } = useUserSettings()
   const day = getDay(data, date)
   const totals = dayTotals(day)
   const [meal, setMeal] = useState<MealId>('breakfast')
 
-  const addFood = (food: QuickFood) =>
-    updateDay(date, (d) => ({
-      ...d,
-      meals: { ...d.meals, [meal]: [...d.meals[meal], { ...food, id: uid() }] },
-    }))
+  // State for quantity modal
+  const [selectedFood, setSelectedFood] = useState<QuickFood | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  const removeFood = (mealId: MealId, id: string) =>
-    updateDay(date, (d) => ({
-      ...d,
-      meals: { ...d.meals, [mealId]: d.meals[mealId].filter((f) => f.id !== id) },
-    }))
+  const targets = {
+    kcal: settings?.target_calories ?? 1850,
+    protein: settings?.target_protein ?? 160,
+    carbs: settings?.target_carb ?? 225,
+    fat: settings?.target_fat ?? 32,
+  }
+
+  const currentMeal = MEALS.find((m) => m.id === meal)
+  const currentMealLabel = currentMeal?.label ?? 'Bữa ăn'
+
+  const syncSupabaseTracking = async (newDay: DayLog) => {
+    try {
+      const newTotals = dayTotals(newDay)
+      await upsertDailyTracking(date, {
+        consumed_protein: round1(newTotals.protein),
+        consumed_carb: round1(newTotals.carbs),
+        consumed_fat: round1(newTotals.fat),
+        creatine_taken: Boolean(newDay.supplements.creatine),
+        omega3_morning_taken: Boolean(newDay.supplements.omega3Morning),
+        omega3_evening_taken: Boolean(newDay.supplements.omega3Evening),
+        meals: newDay.meals,
+      })
+    } catch (e) {
+      console.error('Failed to sync nutrition to Supabase:', e)
+    }
+  }
+
+  const addFood = (food: Omit<FoodEntry, 'id'>) => {
+    updateDay(date, (d) => {
+      const next = {
+        ...d,
+        meals: { ...d.meals, [meal]: [...d.meals[meal], { ...food, id: uid() }] },
+      }
+      syncSupabaseTracking(next)
+      return next
+    })
+  }
+
+  const handleOpenQuantityModal = (food: QuickFood) => {
+    setSelectedFood(food)
+    setModalOpen(true)
+  }
+
+  const removeFood = (mealId: MealId, id: string) => {
+    updateDay(date, (d) => {
+      const next = {
+        ...d,
+        meals: { ...d.meals, [mealId]: d.meals[mealId].filter((f) => f.id !== id) },
+      }
+      syncSupabaseTracking(next)
+      return next
+    })
+  }
 
   return (
     <>
       <div className="grid grid-cols-4 gap-2 rounded-xl border bg-card p-3 text-center">
-        <MacroPill label="Kcal" value={totals.kcal} target={TARGETS.kcal} className="text-primary" />
-        <MacroPill label="P" value={totals.protein} target={TARGETS.protein} className="text-protein" />
-        <MacroPill label="C" value={totals.carbs} target={TARGETS.carbs} className="text-carbs" />
-        <MacroPill label="F" value={totals.fat} target={TARGETS.fat} className="text-fat" />
+        <MacroPill label="Kcal" value={totals.kcal} target={targets.kcal} className="text-primary" />
+        <MacroPill label="P" value={totals.protein} target={targets.protein} className="text-protein" />
+        <MacroPill label="C" value={totals.carbs} target={targets.carbs} className="text-carbs" />
+        <MacroPill label="F" value={totals.fat} target={targets.fat} className="text-fat" />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="size-4 text-primary" aria-hidden="true" />
-            Thêm nhanh vào
+            Thêm nhanh vào {currentMealLabel}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -76,27 +129,39 @@ export function NutritionTab({ date }: { date: string }) {
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {QUICK_FOODS.map((food) => (
-              <button
-                key={food.name}
-                type="button"
-                onClick={() => addFood(food)}
-                className="group flex flex-col items-start gap-1 rounded-lg border bg-muted/30 p-3 text-left transition-colors hover:border-primary/50 active:scale-[0.98]"
-              >
-                <span className="flex w-full items-start justify-between gap-1 text-sm font-semibold leading-tight">
-                  {food.name}
-                  <Plus className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                </span>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {food.kcal} kcal · {food.protein > 5 ? `${food.protein}g P` : `${food.carbs}g C`}
-                </span>
-              </button>
-            ))}
+            {QUICK_FOODS.map((food) => {
+              const displayName = formatFoodName(food, food.baseAmount)
+              return (
+                <button
+                  key={food.name}
+                  type="button"
+                  onClick={() => handleOpenQuantityModal(food)}
+                  className="group flex flex-col items-start gap-1 rounded-lg border bg-muted/30 p-3 text-left transition-colors hover:border-primary/50 active:scale-[0.98]"
+                >
+                  <span className="flex w-full items-start justify-between gap-1 text-sm font-semibold leading-tight">
+                    {displayName}
+                    <Plus className="size-4 shrink-0 text-primary transition-transform group-hover:scale-110" aria-hidden="true" />
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {food.kcal} kcal · {food.protein > 5 ? `${food.protein}g P` : `${food.carbs}g C`}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           <CustomFoodForm onAdd={addFood} />
         </CardContent>
       </Card>
+
+      {/* Quantity Modal Dialog */}
+      <QuantityFoodModal
+        food={selectedFood}
+        mealLabel={currentMealLabel}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onConfirm={addFood}
+      />
 
       {MEALS.map((m) => {
         const foods = day.meals[m.id]

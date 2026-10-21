@@ -16,7 +16,7 @@ export function BottomNav({ active, onChange }: { active: TabId; onChange: (t: T
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg"
+      className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden"
     >
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {ITEMS.map(({ id, label, icon: Icon }) => {
