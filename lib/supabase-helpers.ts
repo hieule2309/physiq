@@ -2,6 +2,9 @@
 
 import { supabase } from './supabase'
 import type { FoodEntry, MealId } from './fitness'
+import { convertImageToWebP } from './image-utils'
+
+export { convertImageToWebP }
 
 /* ---------- Types matching Supabase tables ---------- */
 
@@ -232,5 +235,187 @@ export async function getAnalyticsDataFromSupabase(startDate: string, endDate: s
     }
   }
 }
+
+/* ---------- Weight Logs & Progress Images CRUD ---------- */
+
+export type WeightLog = {
+  id?: string
+  user_id?: string | null
+  weight: number | null
+  image_url: string | null
+  logged_at: string
+  created_at?: string
+  updated_at?: string
+}
+
+export async function getWeightLog(loggedAt: string): Promise<WeightLog | null> {
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .select('*')
+    .eq('logged_at', loggedAt)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as WeightLog
+}
+
+export async function getAllWeightLogs(): Promise<WeightLog[]> {
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .select('*')
+    .order('logged_at', { ascending: true })
+
+  if (error || !data) return []
+  return data as WeightLog[]
+}
+
+export async function saveWeightLogInSupabase(
+  weight: number | null,
+  loggedAt: string,
+): Promise<WeightLog | null> {
+  const userId = await getCurrentUserId()
+  const existing = await getWeightLog(loggedAt)
+
+  const payload = {
+    user_id: userId,
+    logged_at: loggedAt,
+    weight,
+    image_url: existing?.image_url ?? null,
+    updated_at: new Date().toISOString(),
+  }
+
+  let result
+  if (existing?.id) {
+    result = await supabase
+      .from('weight_logs')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single()
+  } else {
+    result = await supabase
+      .from('weight_logs')
+      .insert(payload)
+      .select()
+      .single()
+  }
+
+  if (result.error) {
+    console.error('Error saving weight log to Supabase:', result.error)
+    return null
+  }
+  return result.data as WeightLog
+}
+
+export async function saveWeightImageInSupabase(
+  imageUrl: string | null,
+  loggedAt: string,
+): Promise<WeightLog | null> {
+  const userId = await getCurrentUserId()
+  const existing = await getWeightLog(loggedAt)
+
+  const payload = {
+    user_id: userId,
+    logged_at: loggedAt,
+    weight: existing?.weight ?? null,
+    image_url: imageUrl,
+    updated_at: new Date().toISOString(),
+  }
+
+  let result
+  if (existing?.id) {
+    result = await supabase
+      .from('weight_logs')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single()
+  } else {
+    result = await supabase
+      .from('weight_logs')
+      .insert(payload)
+      .select()
+      .single()
+  }
+
+  if (result.error) {
+    console.error('Error saving progress image url to Supabase:', result.error)
+    return null
+  }
+  return result.data as WeightLog
+}
+
+export async function uploadProgressImage(
+  file: File,
+  loggedAt: string,
+): Promise<string> {
+  const userId = await getCurrentUserId()
+
+  // 1. Client-side conversion to WebP format (with graceful fallback)
+  let uploadBlob: Blob
+  try {
+    uploadBlob = await convertImageToWebP(file, 1200, 0.82)
+  } catch (convErr) {
+    console.warn('convertImageToWebP warning, fallback to original file:', convErr)
+    uploadBlob = file
+  }
+
+  // Determine appropriate content-type and file extension
+  let contentType = uploadBlob.type || 'image/webp'
+  let extension = 'webp'
+  if (contentType === 'image/jpeg') {
+    extension = 'jpg'
+  } else if (contentType === 'image/png') {
+    extension = 'png'
+  } else if (!contentType.startsWith('image/')) {
+    contentType = 'image/webp'
+  }
+
+  const filename = `${userId}/${loggedAt}_${Date.now()}.${extension}`
+
+  // 2. Upload to Supabase Storage 'progress-images' bucket
+  const { error: uploadError } = await supabase.storage
+    .from('progress-images')
+    .upload(filename, uploadBlob, {
+      contentType,
+      cacheControl: '3600',
+      upsert: true,
+    })
+
+  if (uploadError) {
+    console.error('Supabase storage upload error:', uploadError)
+    throw new Error(uploadError.message || 'Lỗi khi upload ảnh lên Supabase Storage')
+  }
+
+  // 3. Get Public URL
+  const { data } = supabase.storage.from('progress-images').getPublicUrl(filename)
+  const publicUrl = data.publicUrl
+
+  // 4. Update image_url in weight_logs
+  await saveWeightImageInSupabase(publicUrl, loggedAt)
+
+  return publicUrl
+}
+
+export async function deleteProgressImage(loggedAt: string): Promise<boolean> {
+  const existing = await getWeightLog(loggedAt)
+  if (existing?.image_url) {
+    try {
+      const urlParts = existing.image_url.split('/progress-images/')
+      if (urlParts.length > 1) {
+        const filePath = decodeURIComponent(urlParts[1].split('?')[0])
+        await supabase.storage.from('progress-images').remove([filePath])
+      }
+    } catch (e) {
+      console.warn('Could not remove file from storage:', e)
+    }
+  }
+
+  await saveWeightImageInSupabase(null, loggedAt)
+  return true
+}
+
 
 

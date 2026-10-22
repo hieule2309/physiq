@@ -7,10 +7,10 @@ export function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
-  const isAuthApi = pathname.startsWith('/api/auth')
+  const isApi = pathname.startsWith('/api/')
 
-  // Cho phép các API auth hoạt động không bị redirect
-  if (isAuthApi) {
+  // Cho phép các API routes hoạt động không bị redirect sang trang HTML
+  if (isApi) {
     return NextResponse.next()
   }
 

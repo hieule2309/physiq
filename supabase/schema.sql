@@ -111,3 +111,61 @@ DROP POLICY IF EXISTS "workout_logs_owner_policy" ON workout_logs;
 DROP POLICY IF EXISTS "Allow all access on workout_logs" ON workout_logs;
 CREATE POLICY "Allow all access on workout_logs" ON workout_logs
   FOR ALL USING (true) WITH CHECK (true);
+
+-- 5. Bảng Weight Logs (Cân nặng & Link ảnh Progress Body)
+CREATE TABLE IF NOT EXISTS weight_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL DEFAULT 'default-user',
+  weight REAL,
+  image_url TEXT,
+  logged_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, logged_at)
+);
+
+-- Nếu bảng đã tồn tại với user_id UUID:
+DO $$
+BEGIN
+  ALTER TABLE weight_logs DROP CONSTRAINT IF EXISTS weight_logs_user_id_fkey;
+  ALTER TABLE weight_logs ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+  ALTER TABLE weight_logs ALTER COLUMN user_id SET DEFAULT 'default-user';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_weight_logs_user_logged ON weight_logs (user_id, logged_at);
+CREATE INDEX IF NOT EXISTS idx_weight_logs_logged_at ON weight_logs (logged_at);
+
+ALTER TABLE weight_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "weight_logs_owner_policy" ON weight_logs;
+DROP POLICY IF EXISTS "Allow all access on weight_logs" ON weight_logs;
+CREATE POLICY "Allow all access on weight_logs" ON weight_logs
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. Supabase Storage Bucket: progress-images (Public Access)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('progress-images', 'progress-images', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Policy cho bucket progress-images
+DROP POLICY IF EXISTS "Public Access progress-images" ON storage.objects;
+CREATE POLICY "Public Access progress-images"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'progress-images');
+
+DROP POLICY IF EXISTS "Allow upload to progress-images" ON storage.objects;
+CREATE POLICY "Allow upload to progress-images"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'progress-images');
+
+DROP POLICY IF EXISTS "Allow update in progress-images" ON storage.objects;
+CREATE POLICY "Allow update in progress-images"
+ON storage.objects FOR UPDATE
+USING (bucket_id = 'progress-images');
+
+DROP POLICY IF EXISTS "Allow delete in progress-images" ON storage.objects;
+CREATE POLICY "Allow delete in progress-images"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'progress-images');
+
