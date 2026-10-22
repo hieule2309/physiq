@@ -1,7 +1,8 @@
 'use client'
 
-import { Dumbbell, Flame, LayoutDashboard, Scale, Settings, UtensilsCrossed } from 'lucide-react'
+import { BarChart2, Dumbbell, Flame, LayoutDashboard, LogOut, Scale, Settings, UtensilsCrossed } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { signOut } from '@/lib/supabase-helpers'
 import type { TabId } from './bottom-nav'
 
 const NAV_ITEMS: { id: TabId; label: string; icon: typeof Dumbbell }[] = [
@@ -9,6 +10,7 @@ const NAV_ITEMS: { id: TabId; label: string; icon: typeof Dumbbell }[] = [
   { id: 'nutrition', label: 'Dinh dưỡng', icon: UtensilsCrossed },
   { id: 'weight', label: 'Cân nặng', icon: Scale },
   { id: 'workout', label: 'Tập luyện', icon: Dumbbell },
+  { id: 'analytics', label: 'Thống kê', icon: BarChart2 },
 ]
 
 export function DesktopSidebar({
@@ -57,15 +59,23 @@ export function DesktopSidebar({
         })}
       </nav>
 
-      {/* Settings button at bottom */}
-      <div className="border-t p-3">
+      {/* Footer buttons at bottom */}
+      <div className="flex flex-col gap-1 border-t p-3">
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Settings className="size-5" aria-hidden="true" />
           Cài đặt thông số
+        </button>
+        <button
+          type="button"
+          onClick={() => signOut()}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          <LogOut className="size-5" aria-hidden="true" />
+          Đăng xuất
         </button>
       </div>
     </aside>

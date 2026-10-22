@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings } from 'lucide-react'
+import { Settings, LogOut } from 'lucide-react'
 import { todayKey } from '@/lib/fitness'
 import { useDailyTrackingSync } from '@/lib/daily-tracking-hook'
 import { useUserSettings } from '@/lib/settings-context'
 import { useHydrated } from '@/lib/storage'
+import { signOut } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { BottomNav, type TabId } from './bottom-nav'
@@ -17,6 +18,7 @@ import { NutritionTab } from './nutrition-tab'
 import { SupplementsCard } from './supplements-card'
 import { WeightTab } from './weight-tab'
 import { WorkoutTab } from './workout-tab'
+import { AnalyticsTab } from './analytics-tab'
 import { getDay } from '@/lib/fitness'
 import { useAppData } from '@/lib/storage'
 
@@ -70,6 +72,17 @@ export function TrackerApp() {
           >
             <Settings className="size-5" />
           </Button>
+
+          {/* Mobile logout button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Đăng xuất"
+            onClick={() => signOut()}
+            className="text-muted-foreground hover:text-destructive md:hidden"
+          >
+            <LogOut className="size-5" />
+          </Button>
         </DateHeader>
 
         <main
@@ -86,6 +99,7 @@ export function TrackerApp() {
             {tab === 'nutrition' && <NutritionTab date={selected} />}
             {tab === 'weight' && <WeightTab date={selected} />}
             {tab === 'workout' && <WorkoutTab date={selected} />}
+            {tab === 'analytics' && <AnalyticsTab />}
           </div>
 
           {/* Right Column — only on overview desktop */}

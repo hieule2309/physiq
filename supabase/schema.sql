@@ -1,7 +1,9 @@
--- Supabase SQL Schema for FitTrack
--- Run this in Supabase SQL Editor
+-- ==============================================================================
+-- Supabase SQL Schema for FitTrack (Single-User, Protected via Next.js .env)
+-- Không cần bảng auth / users trong database. Toàn bộ đăng nhập quản lý qua .env
+-- ==============================================================================
 
--- 1. User Settings Table
+-- 1. Bảng User Settings
 CREATE TABLE IF NOT EXISTS user_settings (
   id TEXT PRIMARY KEY DEFAULT 'default-user',
   age INTEGER NOT NULL,
@@ -21,7 +23,16 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Daily Tracking Table (with meals JSONB support)
+-- Nếu bảng đã tồn tại với kiểu id UUID hoặc có foreign key, đổi lại kiểu TEXT an toàn:
+DO $$
+BEGIN
+  ALTER TABLE user_settings DROP CONSTRAINT IF EXISTS user_settings_id_fkey;
+  ALTER TABLE user_settings ALTER COLUMN id TYPE TEXT USING id::text;
+  ALTER TABLE user_settings ALTER COLUMN id SET DEFAULT 'default-user';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- 2. Bảng Daily Tracking (Dinh dưỡng, meals JSONB, supplements)
 CREATE TABLE IF NOT EXISTS daily_tracking (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL DEFAULT 'default-user',
@@ -38,14 +49,23 @@ CREATE TABLE IF NOT EXISTS daily_tracking (
   UNIQUE (user_id, date)
 );
 
--- For existing databases: add meals column if it doesn't exist yet
+-- Nếu bảng đã tồn tại với kiểu user_id UUID:
+DO $$
+BEGIN
+  ALTER TABLE daily_tracking DROP CONSTRAINT IF EXISTS fk_daily_tracking_user;
+  ALTER TABLE daily_tracking DROP CONSTRAINT IF EXISTS daily_tracking_user_id_fkey;
+  ALTER TABLE daily_tracking ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+  ALTER TABLE daily_tracking ALTER COLUMN user_id SET DEFAULT 'default-user';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 ALTER TABLE daily_tracking
   ADD COLUMN IF NOT EXISTS meals JSONB NOT NULL DEFAULT '{"breakfast":[],"lunch":[],"preWorkout":[],"postWorkout":[]}'::jsonb;
 
--- 3. Workout Logs Table
+-- 3. Bảng Workout Logs (Nhật ký tập luyện & cardio)
 CREATE TABLE IF NOT EXISTS workout_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  user_id TEXT NOT NULL DEFAULT 'default-user',
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   workout_type TEXT NOT NULL,
   exercises JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -56,24 +76,38 @@ CREATE TABLE IF NOT EXISTS workout_logs (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Nếu bảng workout_logs có foreign key tới auth.users:
+DO $$
+BEGIN
+  ALTER TABLE workout_logs DROP CONSTRAINT IF EXISTS workout_logs_user_id_fkey;
+  ALTER TABLE workout_logs ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+  ALTER TABLE workout_logs ALTER COLUMN user_id SET DEFAULT 'default-user';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_daily_tracking_user_date ON daily_tracking (user_id, date);
 CREATE INDEX IF NOT EXISTS idx_workout_logs_date ON workout_logs (date);
 CREATE INDEX IF NOT EXISTS idx_workout_logs_user_date ON workout_logs (user_id, date);
 
--- RLS (Row Level Security) - Allow public access for single-user app
+-- 4. Bật Row Level Security (RLS) mở quyền cho ứng dụng FitTrack
+-- Vì toàn bộ frontend & API đã được bảo vệ 100% bằng Middleware + .env mật khẩu,
+-- RLS ở Supabase chỉ cần cho phép đọc ghi thông qua anon key:
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_tracking ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "user_settings_owner_policy" ON user_settings;
 DROP POLICY IF EXISTS "Allow all access on user_settings" ON user_settings;
 CREATE POLICY "Allow all access on user_settings" ON user_settings
   FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "daily_tracking_owner_policy" ON daily_tracking;
 DROP POLICY IF EXISTS "Allow all access on daily_tracking" ON daily_tracking;
 CREATE POLICY "Allow all access on daily_tracking" ON daily_tracking
   FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "workout_logs_owner_policy" ON workout_logs;
 DROP POLICY IF EXISTS "Allow all access on workout_logs" ON workout_logs;
 CREATE POLICY "Allow all access on workout_logs" ON workout_logs
   FOR ALL USING (true) WITH CHECK (true);

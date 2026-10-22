@@ -1,17 +1,115 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BedDouble, CheckCircle2, Cloud, Dumbbell, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { BedDouble, CheckCircle2, Cloud, Dumbbell, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CARDIO_TYPES, getDay, uid, WORKOUT_TYPES, type WorkoutType } from '@/lib/fitness'
+import { CARDIO_TYPES, getDay, uid, WORKOUT_TYPES, type CardioType, type ExerciseEntry, type WorkoutType } from '@/lib/fitness'
 import { useUserSettings } from '@/lib/settings-context'
 import { updateDay, useAppData } from '@/lib/storage'
 import { getWorkoutLog, saveWorkoutLogInSupabase } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 import { CardioCard } from './cardio-card'
+
+/* ---------- Sortable Exercise Item ---------- */
+
+function SortableExerciseItem({
+  ex,
+  index,
+  date,
+}: {
+  ex: ExerciseEntry
+  index: number
+  date: string
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: ex.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2.5 transition-colors',
+        isDragging
+          ? 'z-50 opacity-80 shadow-xl ring-2 ring-primary/50 bg-card scale-[1.02]'
+          : 'hover:bg-muted/60',
+      )}
+    >
+      {/* Drag Handle */}
+      <button
+        type="button"
+        aria-label="Kéo để sắp xếp"
+        {...attributes}
+        {...listeners}
+        className="flex shrink-0 cursor-grab items-center justify-center rounded p-0.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" />
+      </button>
+
+      {/* Index Badge */}
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-bold text-primary tabular-nums">
+        {index + 1}
+      </span>
+
+      {/* Name + Sets */}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <span className="truncate text-sm font-semibold">{ex.name}</span>
+        <span className="shrink-0 rounded-md border bg-background/80 px-2.5 py-1 text-xs font-bold tabular-nums text-foreground">
+          {ex.sets} sets
+        </span>
+      </div>
+
+      {/* Delete Button */}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Xóa ${ex.name}`}
+        onClick={() =>
+          updateDay(date, (d) => ({
+            ...d,
+            exercises: d.exercises.filter((x) => x.id !== ex.id),
+          }))
+        }
+      >
+        <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
+      </Button>
+    </li>
+  )
+}
+
+/* ---------- WorkoutTab ---------- */
 
 export function WorkoutTab({ date }: { date: string }) {
   const data = useAppData()
@@ -24,31 +122,66 @@ export function WorkoutTab({ date }: { date: string }) {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [setsInput, setSetsInput] = useState('4')
 
-  // Load workout log from Supabase on date change if local has no entries yet
+  // DnD sensors – supports mouse, touch, and keyboard
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+
+  // Load workout log directly from Supabase DB on date change
   useEffect(() => {
     let cancelled = false
     async function fetchRemoteWorkout() {
-      if (day.workoutType || day.exercises.length > 0) return
       try {
         const remote = await getWorkoutLog(date)
         if (cancelled || !remote) return
 
-        // Map remote workout_type back to WorkoutType id
         const matchedType = WORKOUT_TYPES.find(
           (w) => w.label.toLowerCase() === remote.workout_type.toLowerCase(),
         )
 
+        const remoteExercises = Array.isArray(remote.exercises)
+          ? remote.exercises.map((e) => ({
+              id: uid(),
+              name: e.exercise_name,
+              sets: e.sets,
+            }))
+          : []
+
+        const matchedCardio = remote.cardio_type
+          ? CARDIO_TYPES.find(
+              (c) => c.label.toLowerCase() === remote.cardio_type?.toLowerCase(),
+            )
+          : null
+
+        const remoteCardio =
+          remote.cardio_type && remote.cardio_duration_minutes > 0
+            ? [
+                {
+                  id: uid(),
+                  type: (matchedCardio?.id ?? 'incline-walk') as CardioType,
+                  minutes: remote.cardio_duration_minutes,
+                  kcal: remote.cardio_calories_burned,
+                },
+              ]
+            : []
+
         updateDay(date, (d) => ({
           ...d,
-          workoutType: (matchedType?.id as WorkoutType) ?? (remote.workout_type === 'Nghỉ' ? 'rest' : null),
-          exercises: remote.exercises.map((e) => ({
-            id: uid(),
-            name: e.exercise_name,
-            sets: e.sets,
-          })),
+          workoutType:
+            (matchedType?.id as WorkoutType) ?? (remote.workout_type === 'Nghỉ' ? 'rest' : null),
+          exercises: remoteExercises,
+          cardio: remoteCardio.length > 0 ? remoteCardio : d.cardio,
         }))
       } catch (err) {
-        console.error('Failed to load remote workout:', err)
+        console.error('Failed to load remote workout from DB:', err)
       }
     }
 
@@ -56,7 +189,23 @@ export function WorkoutTab({ date }: { date: string }) {
     return () => {
       cancelled = true
     }
-  }, [date, day.workoutType, day.exercises.length])
+  }, [date])
+
+  // Drag end handler – re-order exercises
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    updateDay(date, (d) => {
+      const oldIndex = d.exercises.findIndex((e) => e.id === active.id)
+      const newIndex = d.exercises.findIndex((e) => e.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return d
+      return {
+        ...d,
+        exercises: arrayMove(d.exercises, oldIndex, newIndex),
+      }
+    })
+  }
 
   // Add exercise handler
   const handleAddExercise = (e: React.FormEvent<HTMLFormElement>) => {
@@ -72,7 +221,6 @@ export function WorkoutTab({ date }: { date: string }) {
       exercises: [...d.exercises, { id: uid(), name, sets }],
     }))
 
-    // Reset input fields
     const nameInput = e.currentTarget.elements.namedItem('gym_ex_name_v2') as HTMLInputElement | null
     if (nameInput) {
       nameInput.value = ''
@@ -91,6 +239,7 @@ export function WorkoutTab({ date }: { date: string }) {
         WORKOUT_TYPES.find((w) => w.id === day.workoutType)?.label ??
         (isRest ? 'Nghỉ' : 'Khác')
 
+      // Preserve current array order when saving to Supabase
       const exercisesPayload = isRest
         ? []
         : day.exercises.map((e) => ({
@@ -181,7 +330,7 @@ export function WorkoutTab({ date }: { date: string }) {
         </div>
       ) : (
         <>
-          {/* Exercise Card with Simplified UI (Name + Sets only) */}
+          {/* Exercise Card with Drag & Drop */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -194,7 +343,7 @@ export function WorkoutTab({ date }: { date: string }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* Form Input: Name + Sets only with anti-autofill attributes */}
+              {/* Form Input */}
               <form onSubmit={handleAddExercise} className="flex flex-col gap-3">
                 <div className="grid grid-cols-[1fr_6.5rem] gap-2.5">
                   <div className="flex flex-col gap-1.5">
@@ -238,46 +387,36 @@ export function WorkoutTab({ date }: { date: string }) {
                 </Button>
               </form>
 
-              {/* Added exercises list: Name & Sets only */}
+              {/* Sortable Exercise List */}
               {day.exercises.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-2">Chưa ghi bài tập nào.</p>
               ) : (
-                <ol className="flex flex-col gap-2">
-                  {day.exercises.map((ex, i) => (
-                    <li
-                      key={ex.id}
-                      className="flex items-center gap-3 rounded-lg bg-muted/40 px-3.5 py-2.5 transition-colors hover:bg-muted/60"
-                    >
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-bold text-primary">
-                        {i + 1}
-                      </span>
-                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold">{ex.name}</span>
-                        <span className="shrink-0 rounded-md bg-background/80 px-2.5 py-1 text-xs font-bold tabular-nums text-foreground border">
-                          {ex.sets} sets
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Xóa ${ex.name}`}
-                        onClick={() =>
-                          updateDay(date, (d) => ({
-                            ...d,
-                            exercises: d.exercises.filter((x) => x.id !== ex.id),
-                          }))
-                        }
-                      >
-                        <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </li>
-                  ))}
-                </ol>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={day.exercises.map((e) => e.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ol className="flex flex-col gap-2">
+                      {day.exercises.map((ex, i) => (
+                        <SortableExerciseItem
+                          key={ex.id}
+                          ex={ex}
+                          index={i}
+                          date={date}
+                        />
+                      ))}
+                    </ol>
+                  </SortableContext>
+                </DndContext>
               )}
             </CardContent>
           </Card>
 
-          {/* Cardio Card (Hidden when Rest) */}
+          {/* Cardio Card */}
           <CardioCard date={date} />
         </>
       )}

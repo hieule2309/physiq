@@ -35,9 +35,21 @@ export type DailyTracking = {
   meals?: Record<MealId, FoodEntry[]>
 }
 
-/* ---------- Default user ID (single-user app) ---------- */
+/* ---------- Single-user App Constants ---------- */
 
 const DEFAULT_USER_ID = 'default-user'
+
+export async function getCurrentUserId(): Promise<string> {
+  return DEFAULT_USER_ID
+}
+
+export async function signOut(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' })
+  } finally {
+    window.location.href = '/login'
+  }
+}
 
 /* ---------- User Settings CRUD ---------- */
 
@@ -46,7 +58,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     .from('user_settings')
     .select('*')
     .eq('id', DEFAULT_USER_ID)
-    .single()
+    .maybeSingle()
 
   if (error || !data) return null
   return data as UserSettings
@@ -76,7 +88,7 @@ export async function getDailyTracking(date: string): Promise<DailyTracking | nu
     .select('*')
     .eq('user_id', DEFAULT_USER_ID)
     .eq('date', date)
-    .single()
+    .maybeSingle()
 
   if (error || !data) return null
   return data as DailyTracking
@@ -154,16 +166,6 @@ export async function getWorkoutLog(date: string): Promise<WorkoutLog | null> {
 export async function saveWorkoutLogInSupabase(
   log: Omit<WorkoutLog, 'id' | 'created_at' | 'updated_at'>,
 ): Promise<WorkoutLog | null> {
-  let userId: string | null = null
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (session?.user?.id) {
-      userId = session.user.id
-    }
-  } catch {}
-
   const existing = await getWorkoutLog(log.date)
 
   const payload: Record<string, unknown> = {
@@ -174,10 +176,6 @@ export async function saveWorkoutLogInSupabase(
     cardio_duration_minutes: log.cardio_duration_minutes,
     cardio_calories_burned: log.cardio_calories_burned,
     updated_at: new Date().toISOString(),
-  }
-
-  if (userId) {
-    payload.user_id = userId
   }
 
   let result
@@ -202,3 +200,37 @@ export async function saveWorkoutLogInSupabase(
   }
   return result.data as WorkoutLog
 }
+
+/* ---------- Analytics Range Fetching ---------- */
+
+export async function getAnalyticsDataFromSupabase(startDate: string, endDate: string) {
+  try {
+    const [trackingRes, workoutsRes] = await Promise.all([
+      supabase
+        .from('daily_tracking')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true }),
+      supabase
+        .from('workout_logs')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true }),
+    ])
+
+    return {
+      tracking: (trackingRes.data ?? []) as DailyTracking[],
+      workouts: (workoutsRes.data ?? []) as WorkoutLog[],
+    }
+  } catch (error) {
+    console.error('Error fetching analytics data:', error)
+    return {
+      tracking: [],
+      workouts: [],
+    }
+  }
+}
+
+
