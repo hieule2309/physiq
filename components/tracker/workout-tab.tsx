@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   DndContext,
   PointerSensor,
@@ -24,10 +24,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CARDIO_TYPES, getDay, uid, WORKOUT_TYPES, type CardioType, type ExerciseEntry, type WorkoutType } from '@/lib/fitness'
+import { CARDIO_TYPES, uid, WORKOUT_TYPES, type ExerciseEntry, type WorkoutType } from '@/lib/fitness'
 import { useUserSettings } from '@/lib/settings-context'
-import { updateDay, useAppData } from '@/lib/storage'
-import { getWorkoutLog, saveWorkoutLogInSupabase } from '@/lib/supabase-helpers'
+import { useDailyData } from '@/lib/daily-data-context'
+import { saveWorkoutLogInSupabase } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 import { CardioCard } from './cardio-card'
 
@@ -36,11 +36,11 @@ import { CardioCard } from './cardio-card'
 function SortableExerciseItem({
   ex,
   index,
-  date,
+  onDelete,
 }: {
   ex: ExerciseEntry
   index: number
-  date: string
+  onDelete: (id: string) => void
 }) {
   const {
     attributes,
@@ -96,12 +96,7 @@ function SortableExerciseItem({
         variant="ghost"
         size="icon-sm"
         aria-label={`Xóa ${ex.name}`}
-        onClick={() =>
-          updateDay(date, (d) => ({
-            ...d,
-            exercises: d.exercises.filter((x) => x.id !== ex.id),
-          }))
-        }
+        onClick={() => onDelete(ex.id)}
       >
         <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
       </Button>
@@ -112,9 +107,9 @@ function SortableExerciseItem({
 /* ---------- WorkoutTab ---------- */
 
 export function WorkoutTab({ date }: { date: string }) {
-  const data = useAppData()
+  const { getDay, updateDay } = useDailyData()
   const { settings } = useUserSettings()
-  const day = getDay(data, date)
+  const day = getDay(date)
   const isRest = day.workoutType === 'rest'
   const proteinTarget = settings?.target_protein ?? 160
 
@@ -135,62 +130,6 @@ export function WorkoutTab({ date }: { date: string }) {
     }),
   )
 
-  // Load workout log directly from Supabase DB on date change
-  useEffect(() => {
-    let cancelled = false
-    async function fetchRemoteWorkout() {
-      try {
-        const remote = await getWorkoutLog(date)
-        if (cancelled || !remote) return
-
-        const matchedType = WORKOUT_TYPES.find(
-          (w) => w.label.toLowerCase() === remote.workout_type.toLowerCase(),
-        )
-
-        const remoteExercises = Array.isArray(remote.exercises)
-          ? remote.exercises.map((e) => ({
-              id: uid(),
-              name: e.exercise_name,
-              sets: e.sets,
-            }))
-          : []
-
-        const matchedCardio = remote.cardio_type
-          ? CARDIO_TYPES.find(
-              (c) => c.label.toLowerCase() === remote.cardio_type?.toLowerCase(),
-            )
-          : null
-
-        const remoteCardio =
-          remote.cardio_type && remote.cardio_duration_minutes > 0
-            ? [
-                {
-                  id: uid(),
-                  type: (matchedCardio?.id ?? 'incline-walk') as CardioType,
-                  minutes: remote.cardio_duration_minutes,
-                  kcal: remote.cardio_calories_burned,
-                },
-              ]
-            : []
-
-        updateDay(date, (d) => ({
-          ...d,
-          workoutType:
-            (matchedType?.id as WorkoutType) ?? (remote.workout_type === 'Nghỉ' ? 'rest' : null),
-          exercises: remoteExercises,
-          cardio: remoteCardio.length > 0 ? remoteCardio : d.cardio,
-        }))
-      } catch (err) {
-        console.error('Failed to load remote workout from DB:', err)
-      }
-    }
-
-    fetchRemoteWorkout()
-    return () => {
-      cancelled = true
-    }
-  }, [date])
-
   // Drag end handler – re-order exercises
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -205,6 +144,13 @@ export function WorkoutTab({ date }: { date: string }) {
         exercises: arrayMove(d.exercises, oldIndex, newIndex),
       }
     })
+  }
+
+  const handleDeleteExercise = (id: string) => {
+    updateDay(date, (d) => ({
+      ...d,
+      exercises: d.exercises.filter((x) => x.id !== id),
+    }))
   }
 
   // Add exercise handler
@@ -406,7 +352,7 @@ export function WorkoutTab({ date }: { date: string }) {
                           key={ex.id}
                           ex={ex}
                           index={i}
-                          date={date}
+                          onDelete={handleDeleteExercise}
                         />
                       ))}
                     </ol>

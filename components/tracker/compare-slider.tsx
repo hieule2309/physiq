@@ -5,8 +5,9 @@ import { ChevronsLeftRight, GitCompareArrows } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { formatDateShort } from '@/lib/fitness'
-import type { PhotoMap } from '@/lib/storage'
 import { NativeSelect } from './shared'
+
+export type PhotoMap = Record<string, string>
 
 export function CompareSlider({ photos, dates }: { photos: PhotoMap; dates: string[] }) {
   const [beforeSel, setBefore] = useState<string | null>(null)
@@ -58,9 +59,9 @@ export function CompareSlider({ photos, dates }: { photos: PhotoMap; dates: stri
         </div>
 
         <div className="relative aspect-[3/4] w-full touch-none overflow-hidden rounded-lg border select-none">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URLs from localStorage */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URLs */}
           <img src={photos[after]} alt={`After ${formatDateShort(after)}`} className="absolute inset-0 size-full object-cover" />
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URLs from localStorage */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URLs */}
           <img
             src={photos[before]}
             alt={`Before ${formatDateShort(before)}`}

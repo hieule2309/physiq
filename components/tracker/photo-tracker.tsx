@@ -5,12 +5,12 @@ import { Camera, Check, Cloud, ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDateShort } from '@/lib/fitness'
-import { removePhoto, setPhoto, usePhotos } from '@/lib/storage'
+import { useDailyData } from '@/lib/daily-data-context'
 import { deleteProgressImage, uploadProgressImage } from '@/lib/supabase-helpers'
 import { CompareSlider } from './compare-slider'
 
 export function PhotoTracker({ date }: { date: string }) {
-  const photos = usePhotos()
+  const { photos, setPhoto, removePhoto } = useDailyData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -30,7 +30,7 @@ export function PhotoTracker({ date }: { date: string }) {
       // 2. Automatically updates image_url in weight_logs
       const publicUrl = await uploadProgressImage(file, date)
 
-      // 3. Update local photos store for immediate preview & compare slider
+      // 3. Update context photos for immediate preview & compare slider
       setPhoto(date, publicUrl)
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)

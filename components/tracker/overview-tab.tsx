@@ -1,36 +1,57 @@
 'use client'
 
+import { useMemo } from 'react'
 import { ArrowRight, Target, TrendingDown, UtensilsCrossed } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   addDays,
   dayTotals,
-  getDay,
-  latestWeight,
   WORKOUT_TYPES,
-  weeklyAverage,
+  round1,
 } from '@/lib/fitness'
 import { useUserSettings } from '@/lib/settings-context'
-import { useAppData } from '@/lib/storage'
+import { useDailyData } from '@/lib/daily-data-context'
 import type { TabId } from './bottom-nav'
 import { DailyMacros } from './daily-macros'
 import { fmt, ProgressBar, StatTile } from './shared'
 import { SupplementsCard } from './supplements-card'
 
+function useWeeklyAverage(getDay: (date: string) => { weight: number | null }, endKey: string) {
+  return useMemo(() => {
+    const weights: number[] = []
+    for (let i = 0; i < 7; i++) {
+      const w = getDay(addDays(endKey, -i)).weight
+      if (typeof w === 'number') weights.push(w)
+    }
+    if (weights.length === 0) return { avg: null, count: 0 }
+    return { avg: round1(weights.reduce((a, b) => a + b, 0) / weights.length), count: weights.length }
+  }, [getDay, endKey])
+}
+
+function useLatestWeight(getDay: (date: string) => { weight: number | null }, days: Record<string, { weight: number | null }>, upToKey: string) {
+  return useMemo(() => {
+    const keys = Object.keys(days)
+      .filter((k) => k <= upToKey && typeof days[k].weight === 'number')
+      .sort()
+    const last = keys.at(-1)
+    return last ? (days[last].weight as number) : null
+  }, [days, upToKey])
+}
+
 export function OverviewTab({ date, onNavigate }: { date: string; onNavigate: (t: TabId) => void }) {
-  const data = useAppData()
+  const { getDay, days } = useDailyData()
   const { settings } = useUserSettings()
-  const day = getDay(data, date)
+  const day = getDay(date)
   const totals = dayTotals(day)
   const burned = day.cardio.reduce((a, c) => a + c.kcal, 0)
 
-  const thisWeek = weeklyAverage(data, date)
-  const lastWeek = weeklyAverage(data, addDays(date, -7))
+  const thisWeek = useWeeklyAverage(getDay, date)
+  const lastWeek = useWeeklyAverage(getDay, addDays(date, -7))
   const delta = thisWeek.avg !== null && lastWeek.avg !== null ? thisWeek.avg - lastWeek.avg : null
 
   const startWeight = settings?.weight ?? 76
   const goalWeight = settings?.goal_weight ?? 70
-  const current = latestWeight(data, date) ?? startWeight
+  const current = useLatestWeight(getDay, days, date) ?? startWeight
   const totalToLose = startWeight - goalWeight
   const lost = Math.max(0, startWeight - current)
 

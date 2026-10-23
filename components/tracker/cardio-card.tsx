@@ -1,24 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { HeartPulse, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CARDIO_TYPES, cardioKcal, getDay, latestWeight, uid, type CardioType } from '@/lib/fitness'
+import { CARDIO_TYPES, cardioKcal, uid, type CardioType } from '@/lib/fitness'
 import { useUserSettings } from '@/lib/settings-context'
-import { updateDay, useAppData } from '@/lib/storage'
+import { useDailyData } from '@/lib/daily-data-context'
 import { fmt, NativeSelect } from './shared'
 
 export function CardioCard({ date }: { date: string }) {
-  const data = useAppData()
+  const { getDay, updateDay, days } = useDailyData()
   const { settings } = useUserSettings()
-  const day = getDay(data, date)
+  const day = getDay(date)
   const [type, setType] = useState<CardioType>('incline-walk')
   const [minutes, setMinutes] = useState('')
   const startWeight = settings?.weight ?? 76
-  const weight = latestWeight(data, date) ?? startWeight
+
+  // Get latest weight from context days data
+  const weight = useMemo(() => {
+    const keys = Object.keys(days)
+      .filter((k) => k <= date && typeof days[k].weight === 'number')
+      .sort()
+    const last = keys.at(-1)
+    return last ? (days[last].weight as number) : startWeight
+  }, [days, date, startWeight])
+
   const mins = Math.max(0, Number(minutes) || 0)
   const preview = cardioKcal(type, mins, weight)
   const total = day.cardio.reduce((a, c) => a + c.kcal, 0)

@@ -1,11 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings, LogOut } from 'lucide-react'
 import { todayKey } from '@/lib/fitness'
-import { useDailyTrackingSync } from '@/lib/daily-tracking-hook'
+import { useDailyData } from '@/lib/daily-data-context'
 import { useUserSettings } from '@/lib/settings-context'
-import { useHydrated } from '@/lib/storage'
 import { signOut } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -19,20 +18,26 @@ import { SupplementsCard } from './supplements-card'
 import { WeightTab } from './weight-tab'
 import { WorkoutTab } from './workout-tab'
 import { AnalyticsTab } from './analytics-tab'
-import { getDay } from '@/lib/fitness'
-import { useAppData } from '@/lib/storage'
 
 export function TrackerApp() {
-  const hydrated = useHydrated()
   const { settings, loading } = useUserSettings()
+  const { getDay, fetchDate } = useDailyData()
   const [tab, setTab] = useState<TabId>('overview')
   const [date, setDate] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
 
   const selected = date ?? todayKey()
 
-  // Sync Supabase daily_tracking on active date
-  useDailyTrackingSync(selected)
+  // Mark as hydrated once mounted on client
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  // Fetch data from Supabase when date changes
+  useEffect(() => {
+    fetchDate(selected)
+  }, [selected, fetchDate])
 
   if (!hydrated || loading) {
     return (
@@ -53,6 +58,8 @@ export function TrackerApp() {
       />
     )
   }
+
+  const day = getDay(selected)
 
   return (
     <div className="flex min-h-dvh">
@@ -105,7 +112,7 @@ export function TrackerApp() {
           {/* Right Column — only on overview desktop */}
           {tab === 'overview' && (
             <div className="hidden md:flex md:sticky md:top-24 md:flex-col md:gap-4">
-              <SupplementsSidebar date={selected} />
+              <SupplementsCard date={selected} day={day} />
             </div>
           )}
         </main>
@@ -115,10 +122,4 @@ export function TrackerApp() {
       </div>
     </div>
   )
-}
-
-function SupplementsSidebar({ date }: { date: string }) {
-  const data = useAppData()
-  const day = getDay(data, date)
-  return <SupplementsCard date={date} day={day} />
 }

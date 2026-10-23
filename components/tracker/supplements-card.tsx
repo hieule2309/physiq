@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { DayLog } from '@/lib/fitness'
 import { dayTotals, round1 } from '@/lib/fitness'
-import { updateDay } from '@/lib/storage'
+import { useDailyData } from '@/lib/daily-data-context'
 import { upsertDailyTracking } from '@/lib/supabase-helpers'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +41,7 @@ const ITEMS: ItemConfig[] = [
 ]
 
 export function SupplementsCard({ date, day }: { date: string; day: DayLog }) {
+  const { updateDay } = useDailyData()
   const [syncingKey, setSyncingKey] = useState<string | null>(null)
 
   const isChecked = (key: SupplementKey): boolean => {
@@ -54,7 +55,7 @@ export function SupplementsCard({ date, day }: { date: string; day: DayLog }) {
   const allDone = doneCount === ITEMS.length
 
   const handleToggle = async (item: ItemConfig, checked: boolean) => {
-    // 1. Update local storage
+    // 1. Update context state
     updateDay(date, (d) => ({
       ...d,
       supplements: {

@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   dayTotals,
   formatFoodName,
-  getDay,
   MEALS,
   QUICK_FOODS,
   sumFoods,
@@ -19,17 +18,16 @@ import {
   type DayLog,
 } from '@/lib/fitness'
 import { useUserSettings } from '@/lib/settings-context'
-import { updateDay, useAppData } from '@/lib/storage'
-import { upsertDailyTracking } from '@/lib/supabase-helpers'
+import { useDailyData } from '@/lib/daily-data-context'
 import { cn } from '@/lib/utils'
 import { CustomFoodForm } from './custom-food-form'
 import { QuantityFoodModal } from './quantity-food-modal'
 import { fmt } from './shared'
 
 export function NutritionTab({ date }: { date: string }) {
-  const data = useAppData()
+  const { getDay, updateDay, syncDailyTracking } = useDailyData()
   const { settings } = useUserSettings()
-  const day = getDay(data, date)
+  const day = getDay(date)
   const totals = dayTotals(day)
   const [meal, setMeal] = useState<MealId>('breakfast')
 
@@ -47,30 +45,14 @@ export function NutritionTab({ date }: { date: string }) {
   const currentMeal = MEALS.find((m) => m.id === meal)
   const currentMealLabel = currentMeal?.label ?? 'Bữa ăn'
 
-  const syncSupabaseTracking = async (newDay: DayLog) => {
-    try {
-      const newTotals = dayTotals(newDay)
-      await upsertDailyTracking(date, {
-        consumed_protein: round1(newTotals.protein),
-        consumed_carb: round1(newTotals.carbs),
-        consumed_fat: round1(newTotals.fat),
-        creatine_taken: Boolean(newDay.supplements.creatine),
-        omega3_morning_taken: Boolean(newDay.supplements.omega3Morning),
-        omega3_evening_taken: Boolean(newDay.supplements.omega3Evening),
-        meals: newDay.meals,
-      })
-    } catch (e) {
-      console.error('Failed to sync nutrition to Supabase:', e)
-    }
-  }
-
   const addFood = (food: Omit<FoodEntry, 'id'>) => {
     updateDay(date, (d) => {
       const next = {
         ...d,
         meals: { ...d.meals, [meal]: [...d.meals[meal], { ...food, id: uid() }] },
       }
-      syncSupabaseTracking(next)
+      // Async sync to Supabase (fire and forget)
+      syncDailyTracking(date, next)
       return next
     })
   }
@@ -86,7 +68,7 @@ export function NutritionTab({ date }: { date: string }) {
         ...d,
         meals: { ...d.meals, [mealId]: d.meals[mealId].filter((f) => f.id !== id) },
       }
-      syncSupabaseTracking(next)
+      syncDailyTracking(date, next)
       return next
     })
   }

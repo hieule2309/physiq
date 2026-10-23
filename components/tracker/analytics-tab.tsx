@@ -34,14 +34,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useUserSettings } from '@/lib/settings-context'
-import { useAppData } from '@/lib/storage'
+import { useDailyData } from '@/lib/daily-data-context'
 import {
   addDays,
   CARDIO_TYPES,
   dayTotals,
   formatDateShort,
   fromDateKey,
-  getDay,
   todayKey,
   WORKOUT_TYPES,
   type DayLog,
@@ -65,7 +64,7 @@ function getCardioLabel(type: string | null | undefined): string {
 
 export function AnalyticsTab() {
   const { settings } = useUserSettings()
-  const localData = useAppData()
+  const { getDay } = useDailyData()
 
   const [timeRange, setTimeRange] = useState<TimeRange>('30')
   const [nutritionMode, setNutritionMode] = useState<NutritionViewMode>('calories')
@@ -119,8 +118,8 @@ export function AnalyticsTab() {
       const remoteTrack = supabaseData.tracking.find((t) => t.date === dateKey)
       const remoteWorkout = supabaseData.workouts.find((w) => w.date === dateKey)
 
-      // Local storage match
-      const localDay = getDay(localData, dateKey)
+      // Local/context match
+      const localDay = getDay(dateKey)
       const localTotals = dayTotals(localDay)
 
       // Nutrition values: prefer Supabase if present, else local
@@ -224,7 +223,7 @@ export function AnalyticsTab() {
     }
 
     return points
-  }, [timeRange, supabaseData, localData])
+  }, [timeRange, supabaseData, getDay])
 
   // Aggregate KPI stats
   const kpiStats = useMemo(() => {

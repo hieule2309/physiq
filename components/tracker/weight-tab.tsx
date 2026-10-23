@@ -1,96 +1,65 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { CheckCircle2, Cloud, Loader2, Scale, TrendingDown, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { addDays, getDay, round1, weeklyAverage, weeklyTrend } from '@/lib/fitness'
-import { setPhoto, updateDay, useAppData } from '@/lib/storage'
+import { addDays, round1, formatDateShort } from '@/lib/fitness'
+import { useDailyData } from '@/lib/daily-data-context'
 import {
-  getAllWeightLogs,
-  getWeightLog,
   saveWeightLogInSupabase,
 } from '@/lib/supabase-helpers'
 import { PhotoTracker } from './photo-tracker'
 import { fmt, StatTile } from './shared'
 import { WeightChart } from './weight-chart'
+import { useMemo } from 'react'
+
+function useWeeklyAverage(getDay: (date: string) => { weight: number | null }, endKey: string) {
+  return useMemo(() => {
+    const weights: number[] = []
+    for (let i = 0; i < 7; i++) {
+      const w = getDay(addDays(endKey, -i)).weight
+      if (typeof w === 'number') weights.push(w)
+    }
+    if (weights.length === 0) return { avg: null, count: 0 }
+    return { avg: round1(weights.reduce((a, b) => a + b, 0) / weights.length), count: weights.length }
+  }, [getDay, endKey])
+}
+
+function useWeeklyTrend(getDay: (date: string) => { weight: number | null }, endKey: string, weeks = 8) {
+  return useMemo(() => {
+    const points: { label: string; avg: number | null; days: number }[] = []
+    for (let w = weeks - 1; w >= 0; w--) {
+      const weekEnd = addDays(endKey, -w * 7)
+      const weights: number[] = []
+      for (let i = 0; i < 7; i++) {
+        const wt = getDay(addDays(weekEnd, -i)).weight
+        if (typeof wt === 'number') weights.push(wt)
+      }
+      const avg = weights.length > 0 ? round1(weights.reduce((a, b) => a + b, 0) / weights.length) : null
+      points.push({ label: formatDateShort(weekEnd), avg, days: weights.length })
+    }
+    return points
+  }, [getDay, endKey, weeks])
+}
 
 export function WeightTab({ date }: { date: string }) {
-  const data = useAppData()
-  const day = getDay(data, date)
+  const { getDay, updateDay } = useDailyData()
+  const day = getDay(date)
 
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [syncing, setSyncing] = useState(false)
 
-  // 1. Initial load: sync all historical weight logs and photos from Supabase to local state
-  useEffect(() => {
-    let cancelled = false
-    const syncAllLogs = async () => {
-      try {
-        setSyncing(true)
-        const allLogs = await getAllWeightLogs()
-        if (!cancelled && allLogs && allLogs.length > 0) {
-          allLogs.forEach((log) => {
-            if (log.logged_at && typeof log.weight === 'number') {
-              updateDay(log.logged_at, (d) => {
-                if (d.weight !== log.weight) {
-                  return { ...d, weight: log.weight }
-                }
-                return d
-              })
-            }
-            if (log.logged_at && log.image_url) {
-              setPhoto(log.logged_at, log.image_url)
-            }
-          })
-        }
-      } catch (err) {
-        console.error('Error syncing all weight logs from Supabase:', err)
-      } finally {
-        if (!cancelled) setSyncing(false)
-      }
-    }
-
-    syncAllLogs()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // 2. Sync weight log for the active date from Supabase
-  useEffect(() => {
-    let cancelled = false
-    const syncCurrentDate = async () => {
-      try {
-        const remote = await getWeightLog(date)
-        if (!cancelled && remote) {
-          if (typeof remote.weight === 'number' && remote.weight !== day.weight) {
-            updateDay(date, (d) => ({ ...d, weight: remote.weight }))
-          }
-          if (remote.image_url) {
-            setPhoto(date, remote.image_url)
-          }
-        }
-      } catch (err) {
-        console.error('Error syncing remote weight for date:', err)
-      }
-    }
-
-    syncCurrentDate()
-    return () => {
-      cancelled = true
-    }
-  }, [date])
-
-  const thisWeek = weeklyAverage(data, date)
-  const lastWeek = weeklyAverage(data, addDays(date, -7))
+  const thisWeek = useWeeklyAverage(getDay, date)
+  const lastWeek = useWeeklyAverage(getDay, addDays(date, -7))
   const delta =
     thisWeek.avg !== null && lastWeek.avg !== null
       ? round1(thisWeek.avg - lastWeek.avg)
       : null
+
+  const trendData = useWeeklyTrend(getDay, date)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -98,7 +67,7 @@ export function WeightTab({ date }: { date: string }) {
     if (!Number.isFinite(value) || value < 30 || value > 250) return
 
     const rounded = round1(value)
-    // 1. Update local state immediately for snappy UI reaction
+    // 1. Update context state immediately for snappy UI reaction
     updateDay(date, (d) => ({ ...d, weight: rounded }))
 
     // 2. Persist to Supabase weight_logs table
@@ -218,7 +187,7 @@ export function WeightTab({ date }: { date: string }) {
 
       <DeltaBanner delta={delta} />
 
-      <WeightChart data={weeklyTrend(data, date)} />
+      <WeightChart data={trendData} />
 
       <PhotoTracker date={date} />
     </>
