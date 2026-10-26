@@ -56,7 +56,7 @@ export const QUICK_FOODS: QuickFood[] = [
   { name: 'Cafe đen zero', baseAmount: 1, unit: 'ly', kcal: 2, protein: 0.2, carbs: 0, fat: 0 },
   { name: 'Milo ít đường', baseAmount: 1, unit: 'hộp', kcal: 106, protein: 2.6, carbs: 16, fat: 3.8},
   { name: 'Hạt dẻ cười muối', baseAmount: 30, unit: 'g', kcal: 160, protein: 6, carbs: 8, fat: 13},
-  { name: 'Fami ít đường', baseAmount: 1, unit: 'hộp', kcal: 50, protein: 5, carbs: 7, fat: 5}
+  { name: 'Fami ít đường', baseAmount: 1, unit: 'hộp', kcal: 50, protein: 5, carbs: 7, fat: 3}
 ]
 
 export function formatFoodName(food: QuickFood, amount: number): string {
